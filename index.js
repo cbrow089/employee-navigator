@@ -34,7 +34,7 @@ const questions = [
     {
         type: 'input',
         name: 'department',
-        message: 'What is the name of the department?',
+        message: 'What is the name of the department you would like to add?',
     },
     // input for adding a role for the database
     // Question index 2
@@ -92,6 +92,30 @@ const questions = [
         type: 'list',
         name: 'employees',
         message: `'Which employee's role do you want to update?'`,
+    },
+     // Question index 10
+     {
+        type: 'input',
+        name: 'departmentToDelete',
+        message: 'What is the name of the department you would like to delete?',
+    },
+    // Question index 11
+    {
+        type: 'input',
+        name: 'roleToDelete',
+        message: 'What is the name of the role you would like to delete?',
+    },
+    // Question index 12
+    {
+        type: 'input',
+        name: 'employeeToDelete',
+        message: 'What is the name of the employee you would like to delete?',
+    },
+    // Question index 13
+    {
+        type: 'input',
+        name: 'departmentBudget',
+        message: 'What is the name of the department you would like to view the total budget of?',
     },
 ];
 
@@ -159,24 +183,25 @@ async function init() {
             await viewAllEmployeesByManager(); // Await the viewAllEmployeesByManager function
 
         } else if (answers.action === 'delete department') {
-            const deleteDepartmentAnswers = await inquirer.prompt(questions[1]); // Await the prompt for deleting department
-            console.log(deleteDepartmentAnswers);
-            await deleteDepartment(deleteDepartmentAnswers.department); // Await the deleteDepartment function
+            const {departmentToDelete} = await inquirer.prompt(questions[10]); // Await the prompt for deleting department
+            console.log(departmentToDelete);
+            await deleteDepartment(departmentToDelete); // Await the deleteDepartment function
 
         } else if (answers.action === 'delete role') {
-            const deleteRoleAnswers = await inquirer.prompt(questions[2]); // Await the prompt for deleting role
-            console.log(deleteRoleAnswers);
-            await deleteRole(deleteRoleAnswers.role); // Await the deleteRole function
+            const {roleToDelete} = await inquirer.prompt(questions[11]); // Await the prompt for deleting role
+            console.log(roleToDelete);
+            await deleteRole(roleToDelete); // Await the deleteRole function
 
         } else if (answers.action === 'delete employee') {
-            const deleteEmployeeAnswers = await inquirer.prompt(questions[5]); // Await the prompt for deleting employee
-            console.log(deleteEmployeeAnswers);
-            await deleteEmployee(deleteEmployeeAnswers.employee); // Await the deleteEmployee function
+            const {employeeToDelete} = await inquirer.prompt(questions[12]); // Await the prompt for deleting employee
+            console.log(employeeToDelete);
+            await deleteEmployee(employeeToDelete); // Await the deleteEmployee function
 
         } else if (answers.action === 'view total budget of department') {
-            const budgetAnswers = await inquirer.prompt(questions[1]); // Await the prompt for budget
-            console.log(budgetAnswers);
-            await viewTotalBudget(budgetAnswers.department); // Await the viewTotalBudget function
+            const {departmentBudget} = await inquirer.prompt(questions[13]); // Await the prompt for budget
+            console.log(departmentBudget);
+            await viewTotalBudget(departmentBudget); // Await the viewTotalBudget function
+
         } else if (answers.action === 'exit') {
             console.log('Goodbye!'); // Exit the program
             newPool.end(); // Close the database connection
@@ -443,15 +468,17 @@ async function viewAllEmployeesByDepartment() {
 
     try {
         const res = await newPool.query(query);
-        console.table(res.rows);
+        console.table(res.rows); // Display results in a table format
+        init(); // return to the main question
     } catch (err) {
-        console.error('Error retrieving employees by department:', err);
-    }
+        console.error('Error retrieving employees by department', err);
+    } 
 }
 
 // function to view all employees by manager in the database
 async function viewAllEmployeesByManager() {
     // Query to get all employees and their managers
+    
     const query = `
         SELECT e.first_name, e.last_name, CONCAT(m.first_name, ' ', m.last_name) AS manager
         FROM employee e
@@ -459,18 +486,86 @@ async function viewAllEmployeesByManager() {
     `;
 
     try {
-        const res = await db.query(query);
+        const res = await newPool.query(query);
         console.table(res.rows); // Display results in a table format
+        init(); // return to the main question
     } catch (err) {
         console.error('Error retrieving employees by manager', err);
-    } finally {
-        init(); // return to the main question
-    }
+    } 
 }
 // function to delete a department from the database
+async function deleteDepartment(department) {
+    const query = "DELETE FROM department WHERE name = $1";
+    
+    try {
+        await newPool.query(query, [department]);
+        console.log('Department deleted');
+        init(); // return to the main question
+    } catch (err) {
+        console.error('Error deleting department', err);
+    } 
+}
+
+
 // function to delete a role from the database
+async function deleteRole(role) {
+    const query = "DELETE FROM role WHERE title = $1";
+    
+    try {
+        await newPool.query(query, [role]);
+        console.log('Role deleted');
+        init(); // return to the main question
+    } catch (err) {
+        console.error('Error deleting role', err);
+    } 
+}
 // function to delete an employee from the database
+async function deleteEmployee(employee) {
+    const query = "DELETE FROM employee WHERE CONCAT(first_name, ' ', last_name) = $1";
+    
+    try {
+        console.log('Attempting to delete employee:', employee);
+        const result = await newPool.query(query, [employee]);
+        
+        if (result.rowCount === 0) {
+            console.log('No employee found with that name.');
+        } else {
+            console.log('Employee deleted');
+        }
+        init(); // return to the main question
+    } catch (err) {
+        console.error('Error deleting employee', err);
+    } 
+}
 // function to view the total budget of a department in the database
+async function viewTotalBudget(department) {
+    const query = `
+        SELECT d.name AS department, SUM(r.salary * emp_count) AS total_budget
+        FROM role r
+        JOIN department d ON r.department_id = d.id
+        LEFT JOIN (
+            SELECT role_id, COUNT(*) AS emp_count
+            FROM employee
+            GROUP BY role_id
+        ) e ON e.role_id = r.id
+        WHERE d.name = $1
+        GROUP BY d.name
+    `;
+
+    try {
+        const res = await newPool.query(query, [department]);
+        console.log('Query Result:', res.rows); // Debug log to check the result
+
+        if (res.rows.length > 0) {
+            console.table(res.rows); // Display results in a table format
+        } else {
+            console.log(`No budget information found for department: ${department}`);
+        }
+        init(); // return to the main question
+    } catch (err) {
+        console.error(`Error retrieving total budget for department ${department}:`, err);
+    } 
+}
 
 
 // function to initialize the app
