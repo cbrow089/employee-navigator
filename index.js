@@ -54,7 +54,7 @@ const questions = [
     // Question index 4
     {
         type: 'input',
-        name: 'departmentRole',
+        name: 'department',
         message: 'Which department does the role belong to?',
     },
 
@@ -77,7 +77,7 @@ const questions = [
     {
         type: 'input',
         name: 'employeeRole',
-        message: `'What is the employee's role?'`,
+        message: `'What is the employee's new role?'`,
     },
     // input for adding an employee's manager to the database
     // Question index 8
@@ -123,19 +123,17 @@ const questions = [
 async function init() {
     try {
         const answers = await inquirer.prompt(questions[0]); // Await the prompt for the main action
-        console.log(answers);
+        
 
         if (answers.action === 'add department') {
             const departmentAnswers = await inquirer.prompt(questions[1]); // Await the prompt for department
-            console.log(departmentAnswers);
             await addDepartment(departmentAnswers.department); // Await the addDepartment function
-            init(); // Return to the main question after adding the department
+            await init(); // Return to the main question after adding the department
 
         } else if (answers.action === 'add role') {
             const roleAnswers = await inquirer.prompt(questions.slice(2, 5)); // Await the prompt for role
-            console.log(roleAnswers);
-            await addRole(roleAnswers.role, roleAnswers.salary, roleAnswers.departmentRole); // Await the addRole function
-            init(); // Return to the main question after adding the role
+            await addRole(roleAnswers.role, roleAnswers.salary, roleAnswers.department); // Await the addRole function
+            await init(); // Return to the main question after adding the role
 
         } else if (answers.action === 'view all roles') {
             await viewAllRoles(); // Await the viewAllRoles function
@@ -145,9 +143,9 @@ async function init() {
 
         } else if (answers.action === 'add employee') {
             const employeeAnswers = await inquirer.prompt(questions.slice(5, 9)); // Await the prompt for employee details
-            console.log(employeeAnswers);
+            
             await addEmployee(employeeAnswers.firstName, employeeAnswers.lastName, employeeAnswers.employeeRole, employeeAnswers.employeeManager); // Await the addEmployee function
-            init(); // Return to the main question after adding the employee
+            await init(); // Return to the main question after adding the employee
 
         } else if (answers.action === 'update employee role') {
             const nameAnswers = await inquirer.prompt([
@@ -168,7 +166,7 @@ async function init() {
             ]);
             const newRole = roleAnswers.newRole; // Get the new role
             await updateEmployeeRole(employeeName, newRole); // Await the update function
-            init(); // Return to the main question after updating the role
+            await init(); // Return to the main question after updating the role
 
         } else if (answers.action === 'update employee manager') {
             await updateEmployeeManager(); // Await the updateEmployeeManager function
@@ -184,22 +182,22 @@ async function init() {
 
         } else if (answers.action === 'delete department') {
             const {departmentToDelete} = await inquirer.prompt(questions[10]); // Await the prompt for deleting department
-            console.log(departmentToDelete);
+            
             await deleteDepartment(departmentToDelete); // Await the deleteDepartment function
 
         } else if (answers.action === 'delete role') {
             const {roleToDelete} = await inquirer.prompt(questions[11]); // Await the prompt for deleting role
-            console.log(roleToDelete);
+           
             await deleteRole(roleToDelete); // Await the deleteRole function
 
         } else if (answers.action === 'delete employee') {
             const {employeeToDelete} = await inquirer.prompt(questions[12]); // Await the prompt for deleting employee
-            console.log(employeeToDelete);
+           
             await deleteEmployee(employeeToDelete); // Await the deleteEmployee function
 
         } else if (answers.action === 'view total budget of department') {
             const {departmentBudget} = await inquirer.prompt(questions[13]); // Await the prompt for budget
-            console.log(departmentBudget);
+            
             await viewTotalBudget(departmentBudget); // Await the viewTotalBudget function
 
         } else if (answers.action === 'exit') {
@@ -207,69 +205,67 @@ async function init() {
             newPool.end(); // Close the database connection
         } else {
             console.log('Invalid action. Please try again.');
-            init(); // Return to the main question
+            await init(); // Return to the main question
         }} catch (error) {
             console.error('Error in init function:', error);
-            init(); // Return to the main question in case of an error
+            await init(); // Return to the main question in case of an error
         };
     }
 
 // Function to add a role to the database
-function addRole(role, salary, department) {
-    console.log(`Adding role: ${role}, Salary: ${salary}, Department: ${department}`); // Debugging output
+async function addRole(role, salary, department) {
+    try {
+        const checkRole = "SELECT * FROM role WHERE title = $1";
+        const roleResult = await newPool.query(checkRole, [role]);
 
-    const checkRole = "SELECT * FROM role WHERE title = $1";
-
-    newPool.query(checkRole, [role])
-    .then(result => {
-        if (result.rows.length > 0) {
+        if (roleResult.rows.length > 0) {
             console.log('Role already exists. Please choose a different name.');
-            init(); // return to the main question
-        } else {
-            const getDepartmentId = "SELECT id FROM department WHERE name = $1";
-            return newPool.query(getDepartmentId, [department]);
-        }
-    })
-    .then(result => {
-        // Check if the department was found
-        if (result.rows.length === 0) {
-            console.log('Department not found. Please ensure the department exists.');
-            init(); // return to the main question
+            await init(); // return to the main question
             return; // Exit the function early
         }
 
-        const departmentId = result.rows[0].id;
+        const getDepartmentId = "SELECT id FROM department WHERE name = $1";
+        const departmentResult = await newPool.query(getDepartmentId, [department]);
+
+        // Check if the department was found
+        if (departmentResult.rows.length === 0) {
+            console.log('Department not found. Please ensure the department exists.');
+            await init(); // return to the main question
+            return; // Exit the function early
+        }
+
+        const departmentId = departmentResult.rows[0].id;
         const newRole = "INSERT INTO role (title, salary, department_id) VALUES ($1, $2, $3)";
-        return newPool.query(newRole, [role, salary, departmentId]);
-    })
-    .then(() => {
+        await newPool.query(newRole, [role, salary, departmentId]);
+
         console.log('Role added');
-        init(); // return to the main question
-    })
-    .catch(err => {
+        await init(); // return to the main question
+    } catch (err) {
         console.error('Error adding role:', err.stack); // Added error handling
-    });
+    }
 }
 
 // function to add a department to the database
-function addDepartment(department) {
-    const checkDepartment = "SELECT * FROM department WHERE name = $1";
-    
-    newPool.query(checkDepartment, [department])
-    .then(result => {
+async function addDepartment(department) {
+    try {
+        const checkDepartment = "SELECT * FROM department WHERE name = $1";
+        const result = await newPool.query(checkDepartment, [department]);
+
         if (result.rows.length > 0) {
             console.log('Department already exists. Please choose a different name.');
-            init(); // return to the main question
-        } else {
-            const newDepartment = "INSERT INTO department (name) VALUES ($1)";
-            return newPool.query(newDepartment, [department]);
+            await init(); // return to the main question
+            return; // Exit the function early
         }
-    })
-    .then(() => {
+
+        const newDepartment = "INSERT INTO department (name) VALUES ($1)";
+        await newPool.query(newDepartment, [department]);
+
         console.log('Department added');
-        init(); // return to the main question
-    })
-    .catch(err => console.error('error adding department', err.stack));     
+        await init(); // return to the main question
+    } catch (err) {
+        console.error('Error adding department:', err.stack); // Added error handling
+        await init(); // Return to the main question after an error
+    }
 }
 
 // function to add an employee to the database
@@ -315,48 +311,47 @@ async function addEmployee(firstName, lastName, role, manager) {
 }
 
 // function to update an employee's role in the database
-    async function updateEmployeeRole(employee) {
-        const employeeParts = employee.split(' '); // Split the name into parts
-        const employeeFirstName = employeeParts[0]; // First name
-        const employeeLastName = employeeParts.slice(1).join(' '); // Last name (handles multiple parts)
+async function updateEmployeeRole(employee, newRole) {
+    const employeeParts = employee.split(' '); // Split the name into parts
+    const employeeFirstName = employeeParts[0]; // First name
+    const employeeLastName = employeeParts.slice(1).join(' '); // Last name (handles multiple parts)
 
-        try {
-            // Query to get the employee's ID based on their name
-            const employeeIdQuery = `SELECT id FROM employee WHERE first_name = $1 AND last_name = $2`;
-            const employeeResult = await newPool.query(employeeIdQuery, [employeeFirstName, employeeLastName]);
+    try {
+        // Query to get the employee's ID based on their name
+        const employeeIdQuery = `SELECT id FROM employee WHERE first_name = $1 AND last_name = $2`;
+        const employeeResult = await newPool.query(employeeIdQuery, [employeeFirstName, employeeLastName]);
 
-            if (employeeResult.rows.length === 0) {
-                console.log('Employee not found. Please ensure the name is correct.');
-                return init(); // return to the main question
-            }
-
-            const employeeId = employeeResult.rows[0].id; // Get the employee ID from the query result
-
-            // Prompt the user for the new role
-            const answers = await inquirer.prompt(questions[2]); // Assuming questions[2] is the role prompt
-            const newRole = answers.role;
-
-            // Query to get the role's ID based on the role name
-            const roleIdQuery = `SELECT id FROM role WHERE title = $1`;
-            const roleResult = await newPool.query(roleIdQuery, [newRole]);
-
-            if (roleResult.rows.length === 0) {
-                console.log('Role not found. Please ensure the role exists.');
-                return init(); // return to the main question
-            }
-
-            const roleId = roleResult.rows[0].id; // Get the role ID from the query result
-
-            // Update the employee's role
-            const updateRole = `UPDATE employee SET role_id = $1 WHERE id = $2`;
-            await newPool.query(updateRole, [roleId, employeeId]);
-
-            console.log('Employee role updated');
-            init(); // return to the main question
-        } catch (err) {
-            console.error('Error updating employee role:', err);
+        if (employeeResult.rows.length === 0) {
+            console.log('Employee not found. Please ensure the name is correct.');
+            await init(); // return to the main question
+            return; // Exit the function early
         }
+
+        const employeeId = employeeResult.rows[0].id; // Get the employee ID from the query result
+
+        // Query to get the role's ID based on the role name
+        const roleIdQuery = `SELECT id FROM role WHERE title = $1`;
+        const roleResult = await newPool.query(roleIdQuery, [newRole]);
+
+        if (roleResult.rows.length === 0) {
+            console.log('Role not found. Please ensure the role exists.');
+            await init(); // return to the main question
+            return; // Exit the function early
+        }
+
+        const roleId = roleResult.rows[0].id; // Get the role ID from the query result
+
+        // Update the employee's role
+        const updateRole = `UPDATE employee SET role_id = $1 WHERE id = $2`;
+        await newPool.query(updateRole, [roleId, employeeId]);
+
+        console.log('Employee role updated');
+        await init(); // return to the main question
+    } catch (err) {
+        console.error('Error updating employee role:', err);
+        await init(); // Return to the main question after an error
     }
+}
 
 // Function to view all roles in the database
 async function viewAllRoles() {
@@ -368,7 +363,7 @@ async function viewAllRoles() {
     } catch (err) {
         console.error('Error retrieving roles', err);
     } finally {
-        init(); // return to the main question
+        await init(); // return to the main question
     }
 }
 
@@ -382,7 +377,7 @@ async function viewAllDepartments() {
     } catch (err) {
         console.error('Error retrieving departments', err);
     } finally {
-        init(); // return to the main question
+        await init(); // return to the main question
     }
 }
 
@@ -396,7 +391,7 @@ async function viewAllEmployees() {
     } catch (err) {
         console.error('Error retrieving employees', err);
     } finally {
-        init(); // return to the main question
+        await init(); // return to the main question
     }
 }
 
@@ -405,39 +400,38 @@ async function viewAllEmployees() {
 
 // function to update an employee's manager in the database
 async function updateEmployeeManager() {
-    // First prompt for the employee's name
-    inquirer.prompt([
-        {
-            type: 'input',
-            name: 'employeeName',
-            message: 'Enter the full name of the employee (first and last):'
-        }
-    ])
-    .then(answers => {
+    try {
+        // First prompt for the employee's name
+        const answers = await inquirer.prompt([
+            {
+                type: 'input',
+                name: 'employeeName',
+                message: 'Enter the full name of the employee (first and last):'
+            }
+        ]);
+
         const employeeName = answers.employeeName; // Get the employee's name
 
         // Now prompt for the new manager
-        return inquirer.prompt([
+        const managerAnswers = await inquirer.prompt([
             {
                 type: 'input',
                 name: 'newManager',
                 message: 'Who is the new manager for the employee?'
             }
-        ]).then(managerAnswers => {
-            const newManager = managerAnswers.newManager; // Get the new manager
-            
-            // Call the function to update the employee's manager in the database
-            return updateManagerInDatabase(employeeName, newManager);
-        });
-    })
-    .then(() => {
+        ]);
+
+        const newManager = managerAnswers.newManager; // Get the new manager
+        
+        // Call the function to update the employee's manager in the database
+        await updateManagerInDatabase(employeeName, newManager);
+
         console.log('Employee manager updated successfully!'); // Confirmation message
-        init(); // Return to the main question after updating the manager
-    })
-    .catch(err => {
+    } catch (err) {
         console.error('Error updating employee manager:', err);
-        init(); // Return to the main question after an error
-    });
+    } finally {
+        await init(); // Return to the main question after updating the manager or an error
+    }
 }
 
 // Function to update an employee's manager in the database
@@ -452,6 +446,7 @@ async function updateManagerInDatabase(employeeName, newManager) {
             WHERE CONCAT(first_name, ' ', last_name) = $2
         `;
         await db.query(query, [newManager, employeeName]); // Ensure both parameters are provided
+        await init(); // return to the main question
     } catch (error) {
         console.error('Error updating manager in database:', error);
     }
@@ -469,7 +464,7 @@ async function viewAllEmployeesByDepartment() {
     try {
         const res = await newPool.query(query);
         console.table(res.rows); // Display results in a table format
-        init(); // return to the main question
+        await init(); // return to the main question
     } catch (err) {
         console.error('Error retrieving employees by department', err);
     } 
@@ -488,7 +483,7 @@ async function viewAllEmployeesByManager() {
     try {
         const res = await newPool.query(query);
         console.table(res.rows); // Display results in a table format
-        init(); // return to the main question
+        await init(); // return to the main question
     } catch (err) {
         console.error('Error retrieving employees by manager', err);
     } 
@@ -500,7 +495,7 @@ async function deleteDepartment(department) {
     try {
         await newPool.query(query, [department]);
         console.log('Department deleted');
-        init(); // return to the main question
+        await init(); // return to the main question
     } catch (err) {
         console.error('Error deleting department', err);
     } 
@@ -514,7 +509,7 @@ async function deleteRole(role) {
     try {
         await newPool.query(query, [role]);
         console.log('Role deleted');
-        init(); // return to the main question
+        await init(); // return to the main question
     } catch (err) {
         console.error('Error deleting role', err);
     } 
@@ -532,7 +527,7 @@ async function deleteEmployee(employee) {
         } else {
             console.log('Employee deleted');
         }
-        init(); // return to the main question
+        await init(); // return to the main question
     } catch (err) {
         console.error('Error deleting employee', err);
     } 
@@ -561,7 +556,7 @@ async function viewTotalBudget(department) {
         } else {
             console.log(`No budget information found for department: ${department}`);
         }
-        init(); // return to the main question
+        await init(); // return to the main question
     } catch (err) {
         console.error(`Error retrieving total budget for department ${department}:`, err);
     } 
